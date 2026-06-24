@@ -1279,7 +1279,8 @@ function renderBookmarkList() {
         <div class="bookmark-url">${esc(b.url)}</div>
       </div>
       <span style="font-size:10px;color:var(--text3);flex-shrink:0">${b.savedAt||''}</span>
-      <button class="bookmark-del" onclick="deleteBookmark(event,${i})">×</button>
+      <button class="bookmark-del" title="名前を変更" onclick="renameBookmark(event,${i})">✏️</button>
+      <button class="bookmark-del" title="削除" onclick="deleteBookmark(event,${i})">×</button>
     </div>`).join('');
 }
 function loadBookmark(i) {
@@ -1288,6 +1289,15 @@ function loadBookmark(i) {
   document.getElementById('googleUrl').value = list[i].url;
   document.getElementById('bookmarkPopup').classList.remove('show');
   loadGoogleSheet();
+}
+function renameBookmark(e, i) {
+  e.stopPropagation();
+  const list = getBookmarks();
+  const newName = prompt('新しい名前を入力してください', list[i].name);
+  if (!newName || newName === list[i].name) return;
+  list[i].name = newName;
+  saveBookmarks(list);
+  renderBookmarkList();
 }
 function deleteBookmark(e, i) {
   e.stopPropagation();
