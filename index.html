@@ -408,8 +408,10 @@ body.dark mark { background: #7c6f00; }
 .bookmark-item:hover { background:var(--surface2); }
 .bookmark-name { flex:1; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .bookmark-url { font-size:11px; color:var(--text3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px; }
-.bookmark-del { font-size:14px; color:var(--text3); background:none; border:none; cursor:pointer; padding:0 2px; line-height:1; flex-shrink:0; }
-.bookmark-del:hover { color:var(--red); }
+.bookmark-del { font-size:12px; color:var(--text3); background:none; border:none; cursor:pointer; padding:2px 5px; line-height:1; flex-shrink:0; border-radius:3px; }
+.bookmark-del:hover { color:var(--red); background:var(--red-light); }
+.bookmark-edit { font-size:12px; color:var(--text3); background:none; border:none; cursor:pointer; padding:2px 5px; line-height:1; flex-shrink:0; border-radius:3px; }
+.bookmark-edit:hover { color:var(--accent); background:var(--accent-light); }
 .bookmark-empty { font-size:12px; color:var(--text3); padding:8px 4px; }
 /* データ品質パネル */
 .quality-panel { background: var(--surface); border: 1px solid var(--amber); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 10px; box-shadow: var(--shadow); }
@@ -1279,8 +1281,8 @@ function renderBookmarkList() {
         <div class="bookmark-url">${esc(b.url)}</div>
       </div>
       <span style="font-size:10px;color:var(--text3);flex-shrink:0">${b.savedAt||''}</span>
-      <button class="bookmark-del" title="名前を変更" onclick="renameBookmark(event,${i})">✏️</button>
-      <button class="bookmark-del" title="削除" onclick="deleteBookmark(event,${i})">×</button>
+      <button class="bookmark-edit" title="名前を変更" onclick="renameBookmark(event,${i})">編集</button>
+      <button class="bookmark-del" title="削除" onclick="deleteBookmark(event,${i})">削除</button>
     </div>`).join('');
 }
 function loadBookmark(i) {
@@ -1302,6 +1304,7 @@ function renameBookmark(e, i) {
 function deleteBookmark(e, i) {
   e.stopPropagation();
   const list = getBookmarks();
+  if (!confirm(`「${list[i].name}」を削除しますか？`)) return;
   list.splice(i, 1);
   saveBookmarks(list);
   renderBookmarkList();
