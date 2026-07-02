@@ -1760,7 +1760,8 @@ function processData(raw, sourceName) {
   rawHeaders = Object.keys(raw[0]);
   _pendingSourceName = sourceName;
 
-  // 保存済みマッピングがあれば復元
+  // ファイルが変わるたびにマッピングをリセットし、保存済みがあれば復元
+  colOverrides = {};
   const saved = loadColMapping(sourceName);
   if (saved) colOverrides = saved;
 
