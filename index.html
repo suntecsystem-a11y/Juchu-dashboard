@@ -1790,13 +1790,8 @@ function processData(raw, sourceName) {
   const saved = loadColMapping(_pendingSourceKey);
   if (saved) colOverrides = saved;
 
-  const cols = { ...detectColumns(raw[0]), ...colOverrides };
-  // 必須列が未検出ならマッピングモーダルを自動表示
-  const missing = [];
-  if (!cols.date)                  missing.push('日付列');
-  if (!cols.product)               missing.push('商品名列');
-  if (!cols.price && !cols.total)  missing.push('金額列');
-  if (missing.length && !saved) {
+  // 保存済みマッピングがなければ常にマッピング画面を表示（自動検出結果をプリセット）
+  if (!saved) {
     showColMap(true);
     return;
   }
