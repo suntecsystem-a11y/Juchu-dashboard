@@ -1104,19 +1104,30 @@ window.addEventListener('DOMContentLoaded', () => {
 // ===== Column detection =====
 function detectColumns(row) {
   const keys = Object.keys(row);
-  const find = (...c) => keys.find(k => c.some(x => k.includes(x))) || null;
+  const find = (...c) => keys.find(k => c.some(x => k.toLowerCase().includes(x.toLowerCase()))) || null;
   return {
-    id:       find('注文ID','ID','id','注文番号','order'),
-    date:     find('注文日','日付','date','Date','受注日'),
-    product:  find('商品名','商品','product','品名','アイテム'),
-    qty:      find('数量','個数','qty','quantity','注文数'),
-    price:    find('価格','単価','price','Price'),
-    total:    find('総額','合計','total','Total','金額'),
-    status:   find('ステータス','status','Status','状態'),
-    category: find('カテゴリ','category','Category','分類'),
-    series:   find('シリーズ','series','Series'),
-    shipping: find('送料','shipping','Shipping'),
+    id:       find('注文ID','注文番号','受注番号','order_id','orderid','ID','管理番号'),
+    date:     find('注文日','受注日','日付','購入日','取引日','date','Date','日時'),
+    product:  find('商品名','商品','品名','製品名','アイテム','product','item','品番'),
+    qty:      find('数量','個数','注文数','購入数','qty','quantity','count','個'),
+    price:    find('価格','単価','金額','price','amount','売上','受注金額'),
+    total:    find('総額','合計金額','合計','小計','total','subtotal','Total','受注金額合計'),
+    status:   find('ステータス','状態','進捗','status','state'),
+    category: find('カテゴリ','分類','種別','category','type','区分'),
+    series:   find('シリーズ','series','シリーズ名'),
+    shipping: find('送料','配送料','shipping','delivery'),
   };
+}
+
+// ===== Column mapping persistence =====
+function mappingKey(sourceName) {
+  return 'colMap_' + btoa(encodeURIComponent(sourceName)).slice(0, 32);
+}
+function saveColMapping(sourceName, mapping) {
+  try { localStorage.setItem(mappingKey(sourceName), JSON.stringify(mapping)); } catch(e) {}
+}
+function loadColMapping(sourceName) {
+  try { return JSON.parse(localStorage.getItem(mappingKey(sourceName)) || 'null'); } catch(e) { return null; }
 }
 function parseDate(v) {
   if (!v) return null;
@@ -1144,12 +1155,9 @@ function fmtDateFull(d) {
 function monthKey(d) { return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : null; }
 function getCategory(name) {
   if (!name) return 'その他';
-  if (name.includes('五月人形')) return '五月人形';
-  if (name.includes('3段')) return 'こいのぼり 3段';
-  if (name.includes('1段')) return 'こいのぼり 1段';
-  if (name.includes('関守石')) return '関守石';
-  if (name.includes('フラワー')) return 'フラワーベース';
-  return 'その他';
+  // 商品名の最初のスペース・記号・括弧までを取り出してカテゴリとする
+  const m = name.match(/^([^\s　（）()【】「」\/／\-_]+)/);
+  return m ? m[1] : name.slice(0, 10) || 'その他';
 }
 function statusBadge(s) {
   if (!s) return `<span class="badge other">—</span>`;
@@ -1202,34 +1210,62 @@ function updateColVisCSS() {
 
 // ===== Column mapping modal =====
 const COL_FIELDS = [
-  { key:'id',       label:'注文ID',   req:false },
-  { key:'date',     label:'注文日',   req:true  },
-  { key:'product',  label:'商品名',   req:true  },
-  { key:'qty',      label:'数量',     req:false },
-  { key:'price',    label:'価格',     req:true  },
-  { key:'shipping', label:'送料',     req:false },
-  { key:'total',    label:'総額',     req:false },
+  { key:'id',       label:'注文ID',     req:false },
+  { key:'date',     label:'日付',       req:true  },
+  { key:'product',  label:'商品名',     req:true  },
+  { key:'qty',      label:'数量',       req:false },
+  { key:'price',    label:'価格／金額', req:true  },
+  { key:'shipping', label:'送料',       req:false },
+  { key:'total',    label:'合計金額',   req:false },
   { key:'status',   label:'ステータス', req:false },
-  { key:'category', label:'カテゴリ', req:false },
-  { key:'series',   label:'シリーズ', req:false },
+  { key:'category', label:'カテゴリ',   req:false },
+  { key:'series',   label:'シリーズ',   req:false },
 ];
-function showColMap() {
+let _colMapAutoMode = false;
+function showColMap(autoMode) {
   if (!rawHeaders.length) { showWarn('先にファイルを読み込んでください'); return; }
+  _colMapAutoMode = !!autoMode;
   const currentCols = { ...detectColumns(rawData[0]), ...colOverrides };
-  const opts = ['(なし)', ...rawHeaders].map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('');
-  document.getElementById('colMapBody').innerHTML = COL_FIELDS.map(f => {
+
+  // データプレビュー（最初の3行）
+  const previewRows = rawData.slice(0, 3);
+  const previewHtml = `
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">データプレビュー（先頭3行）</div>
+      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm)">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="background:var(--surface2)">${rawHeaders.map(h => `<th style="padding:4px 8px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text2);font-weight:600;text-align:left">${esc(h)}</th>`).join('')}</tr></thead>
+          <tbody>${previewRows.map(r => `<tr>${rawHeaders.map(h => `<td style="padding:3px 8px;border-bottom:1px solid var(--border);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${esc(String(r[h]??''))}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  // マッピング行
+  const mapHtml = COL_FIELDS.map(f => {
     const cur = currentCols[f.key] || '';
     const sel = ['(なし)', ...rawHeaders].map(h =>
       `<option value="${esc(h)}" ${h===cur?'selected':''}>${esc(h)}</option>`
     ).join('');
-    return `<div class="modal-row">
-      <label>${f.label}${f.req?'<span class="req">*</span>':''}</label>
+    const missing = f.req && !cur;
+    return `<div class="modal-row" style="${missing?'background:var(--red-light);border-radius:var(--radius-sm);padding:4px 8px;margin:4px -8px':''}">
+      <label>${f.label}${f.req?'<span class="req">*</span>':''}${missing?'<span style="font-size:10px;color:var(--red);margin-left:4px">未検出</span>':''}</label>
       <select id="cm_${f.key}">${sel}</select>
     </div>`;
   }).join('');
+
+  const autoMsg = autoMode ? `<div style="background:var(--amber-light);color:var(--amber);border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;margin-bottom:14px">⚠ 一部の列を自動検出できませんでした。下のプレビューを参考に列を指定してください。</div>` : '';
+
+  document.getElementById('colMapBody').innerHTML = autoMsg + previewHtml + mapHtml;
   document.getElementById('colMapModal').classList.add('show');
 }
 function closeColMap() {
+  if (_colMapAutoMode) {
+    // 自動表示モードでキャンセルした場合→マッピングなしで強制続行
+    _colMapAutoMode = false;
+    document.getElementById('colMapModal').classList.remove('show');
+    _applyDataWithCols({});
+    return;
+  }
   document.getElementById('colMapModal').classList.remove('show');
 }
 function applyColMap() {
@@ -1240,9 +1276,44 @@ function applyColMap() {
     else if (v === '(なし)') overrides[f.key] = null;
   });
   colOverrides = overrides;
+  if (_pendingSourceName) saveColMapping(_pendingSourceName, overrides);
+  _colMapAutoMode = false;
   closeColMap();
-  const sourceName = document.getElementById('fileInfo').textContent.split('  ')[0];
-  processData(rawData, sourceName);
+  _applyDataWithCols(overrides);
+}
+function _applyDataWithCols(overrides) {
+  const sourceName = _pendingSourceName || document.getElementById('fileInfo').textContent.split('  ')[0];
+  const cols = { ...detectColumns(rawData[0]), ...overrides };
+  allRows = rawData.map(r => ({
+    id:          r[cols.id] || '',
+    date:        parseDate(r[cols.date]),
+    product:     String(r[cols.product] || ''),
+    qty:         Number(r[cols.qty]) || 1,
+    price:       Number(r[cols.price]) || 0,
+    total:       Number(r[cols.total]) || Number(r[cols.price]) || 0,
+    status:      String(r[cols.status] || ''),
+    category:    cols.category ? String(r[cols.category] || '') : getCategory(String(r[cols.product] || '')),
+    rawCategory: cols.category ? String(r[cols.category] || '') : '',
+    series:      cols.series   ? String(r[cols.series]   || '') : '',
+    shipping:    cols.shipping ? Number(r[cols.shipping]) || 0 : 0,
+  }));
+  activeProduct = null; crossFilters = {}; calViewYear = null; calViewMonth = null;
+  const colSummary = [cols.date, cols.product, cols.price || cols.total].filter(Boolean).join(' / ');
+  document.getElementById('fileInfo').textContent = sourceName + '  (' + allRows.length + '件)' + (colSummary ? '  [' + colSummary + ']' : '');
+  document.getElementById('loader').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('refreshBtn').classList.toggle('visible', sourceName === 'Google スプレッドシート' || sourceName === 'OneDrive Excel');
+  const dates = allRows.map(r => r.date).filter(Boolean);
+  if (dates.length) {
+    const mn = new Date(Math.min(...dates)), mx = new Date(Math.max(...dates));
+    document.getElementById('dateFrom').value = mn.toISOString().slice(0, 10);
+    document.getElementById('dateTo').value   = mx.toISOString().slice(0, 10);
+  }
+  buildFilters();
+  renderChipsBar();
+  runQualityCheck(allRows);
+  initTargetInput();
+  renderCurrentView();
 }
 
 // ===== URLブックマーク =====
@@ -1682,51 +1753,28 @@ function renderABCChart(rows) {
 }
 
 // ===== Process =====
+let _pendingSourceName = null;
 function processData(raw, sourceName) {
   if (!raw.length) { alert('データが見つかりませんでした'); return; }
   rawData = raw;
   rawHeaders = Object.keys(raw[0]);
+  _pendingSourceName = sourceName;
+
+  // 保存済みマッピングがあれば復元
+  const saved = loadColMapping(sourceName);
+  if (saved) colOverrides = saved;
+
   const cols = { ...detectColumns(raw[0]), ...colOverrides };
-  // Warn if critical columns are undetectable
+  // 必須列が未検出ならマッピングモーダルを自動表示
   const missing = [];
-  if (!cols.date)    missing.push('注文日（date）');
-  if (!cols.product) missing.push('商品名（product）');
-  if (!cols.price && !cols.total) missing.push('価格／総額（price/total）');
-  if (missing.length) {
-    const keys = Object.keys(raw[0]).join('、');
-    alert(`⚠ 以下の列が検出できませんでした:\n${missing.join('\n')}\n\n検出された列名:\n${keys}\n\n列名に「注文日」「商品名」「価格」「総額」などが含まれているか確認してください。`);
+  if (!cols.date)                  missing.push('日付列');
+  if (!cols.product)               missing.push('商品名列');
+  if (!cols.price && !cols.total)  missing.push('金額列');
+  if (missing.length && !saved) {
+    showColMap(true);
+    return;
   }
-  allRows = raw.map(r => ({
-    id:       r[cols.id] || '',
-    date:     parseDate(r[cols.date]),
-    product:  r[cols.product] || '',
-    qty:      Number(r[cols.qty]) || 1,
-    price:    Number(r[cols.price]) || 0,
-    total:    Number(r[cols.total]) || Number(r[cols.price]) || 0,
-    status:   String(r[cols.status] || ''),
-    category: getCategory(String(r[cols.product] || '')),
-    rawCategory: cols.category ? String(r[cols.category] || '') : '',
-    series:      cols.series   ? String(r[cols.series]   || '') : '',
-    shipping:    cols.shipping ? Number(r[cols.shipping]) || 0 : 0,
-  }));
-  activeProduct = null; crossFilters = {}; calViewYear = null; calViewMonth = null;
-  const colSummary = [cols.date, cols.product, cols.price||cols.total].filter(Boolean).join(' / ');
-  document.getElementById('fileInfo').textContent = sourceName + '  (' + allRows.length + '件)' + (colSummary ? '  [' + colSummary + ']' : '');
-  document.getElementById('loader').style.display = 'none';
-  document.getElementById('dashboard').style.display = 'block';
-  document.getElementById('refreshBtn').classList.toggle('visible', sourceName === 'Google スプレッドシート' || sourceName === 'OneDrive Excel');
-  // Set date range defaults
-  const dates = allRows.map(r => r.date).filter(Boolean);
-  if (dates.length) {
-    const mn = new Date(Math.min(...dates)), mx = new Date(Math.max(...dates));
-    document.getElementById('dateFrom').value = mn.toISOString().slice(0,10);
-    document.getElementById('dateTo').value   = mx.toISOString().slice(0,10);
-  }
-  buildFilters();
-  renderChipsBar();
-  runQualityCheck(allRows);
-  initTargetInput();
-  renderCurrentView();
+  _applyDataWithCols(colOverrides);
 }
 
 // ===== Filters =====
