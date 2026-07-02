@@ -1140,16 +1140,10 @@ function detectColumns(row) {
   };
 }
 
-// ===== Column mapping persistence =====
-function mappingKey(sourceName) {
-  return 'colMap_' + btoa(encodeURIComponent(sourceName)).slice(0, 32);
-}
-function saveColMapping(sourceName, mapping) {
-  try { localStorage.setItem(mappingKey(sourceName), JSON.stringify(mapping)); } catch(e) {}
-}
-function loadColMapping(sourceName) {
-  try { return JSON.parse(localStorage.getItem(mappingKey(sourceName)) || 'null'); } catch(e) { return null; }
-}
+// ===== Column mapping persistence（セッション内のみ保持） =====
+const _sessionMappings = {};
+function saveColMapping(key, mapping) { _sessionMappings[key] = mapping; }
+function loadColMapping(key) { return _sessionMappings[key] || null; }
 function parseDate(v) {
   if (!v) return null;
   if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400000));
