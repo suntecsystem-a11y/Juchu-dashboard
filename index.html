@@ -961,6 +961,7 @@ function loadFile(file) {
       } else {
         wb = XLSX.read(e.target.result, { type: 'array' });
       }
+      _pendingSourceKey = file.name;
       processData(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }), file.name);
     } catch(err) { alert('読み込み失敗: ' + err.message); }
   };
@@ -1042,6 +1043,7 @@ async function loadGoogleSheet() {
     const res = isPub ? await fetch(csvUrl) : await gsFetch(csvUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const rows = await parseGsResponse(res);
+    _pendingSourceKey = url;
     processData(rows, 'Google スプレッドシート');
     lastSource = { type: 'google', url }; localStorage.setItem('lastGoogleUrl', url);
   } catch(err) { showError(er, '読み込みに失敗: ' + err.message); }
@@ -1060,6 +1062,7 @@ async function loadOneDrive() {
     const res = await fetch(`https://api.onedrive.com/v1.0/shares/${encoded}/root/content`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const wb = XLSX.read(await res.arrayBuffer(), { type: 'array' });
+    _pendingSourceKey = url;
     processData(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }), 'OneDrive Excel');
     lastSource = { type: 'onedrive', url }; localStorage.setItem('lastOnedriveUrl', url);
   } catch(err) { showError(er, '読み込みに失敗: ' + err.message); }
@@ -1104,18 +1107,36 @@ window.addEventListener('DOMContentLoaded', () => {
 // ===== Column detection =====
 function detectColumns(row) {
   const keys = Object.keys(row);
-  const find = (...c) => keys.find(k => c.some(x => k.toLowerCase().includes(x.toLowerCase()))) || null;
+  // 完全一致優先、次に前方一致、最後に部分一致の順で探す
+  const find = (...candidates) => {
+    // 完全一致
+    for (const c of candidates) {
+      const k = keys.find(k => k === c);
+      if (k) return k;
+    }
+    // 前方一致（大文字小文字無視）
+    for (const c of candidates) {
+      const k = keys.find(k => k.toLowerCase().startsWith(c.toLowerCase()));
+      if (k) return k;
+    }
+    // 部分一致（大文字小文字無視）
+    for (const c of candidates) {
+      const k = keys.find(k => k.toLowerCase().includes(c.toLowerCase()));
+      if (k) return k;
+    }
+    return null;
+  };
   return {
-    id:       find('注文ID','注文番号','受注番号','order_id','orderid','ID','管理番号'),
-    date:     find('注文日','受注日','日付','購入日','取引日','date','Date','日時'),
-    product:  find('商品名','商品','品名','製品名','アイテム','product','item','品番'),
-    qty:      find('数量','個数','注文数','購入数','qty','quantity','count','個'),
-    price:    find('価格','単価','金額','price','amount','売上','受注金額'),
-    total:    find('総額','合計金額','合計','小計','total','subtotal','Total','受注金額合計'),
-    status:   find('ステータス','状態','進捗','status','state'),
-    category: find('カテゴリ','分類','種別','category','type','区分'),
-    series:   find('シリーズ','series','シリーズ名'),
-    shipping: find('送料','配送料','shipping','delivery'),
+    id:       find('注文ID','注文番号','受注番号','order_id','orderid'),
+    date:     find('注文日','受注日','日付','購入日','取引日','date'),
+    product:  find('商品名','品名','製品名','商品','product','item'),
+    qty:      find('数量','個数','注文数','購入数','qty','quantity'),
+    price:    find('価格','単価','price','amount'),
+    total:    find('総額','合計金額','受注金額合計','合計','total'),
+    status:   find('ステータス','状態','status'),
+    category: find('カテゴリ','分類','category'),
+    series:   find('シリーズ','series'),
+    shipping: find('送料','配送料','shipping'),
   };
 }
 
@@ -1276,7 +1297,7 @@ function applyColMap() {
     else if (v === '(なし)') overrides[f.key] = null;
   });
   colOverrides = overrides;
-  if (_pendingSourceName) saveColMapping(_pendingSourceName, overrides);
+  if (_pendingSourceKey) saveColMapping(_pendingSourceKey, overrides);
   _colMapAutoMode = false;
   closeColMap();
   _applyDataWithCols(overrides);
@@ -1754,15 +1775,19 @@ function renderABCChart(rows) {
 
 // ===== Process =====
 let _pendingSourceName = null;
+let _pendingSourceKey = null;
 function processData(raw, sourceName) {
   if (!raw.length) { alert('データが見つかりませんでした'); return; }
   rawData = raw;
   rawHeaders = Object.keys(raw[0]);
   _pendingSourceName = sourceName;
+  // _pendingSourceKey はloadFile/loadGoogleSheet/loadOneDriveで事前にセット済み
+  // セットされていなければsourceNameで代用
+  if (!_pendingSourceKey) _pendingSourceKey = sourceName;
 
   // ファイルが変わるたびにマッピングをリセットし、保存済みがあれば復元
   colOverrides = {};
-  const saved = loadColMapping(sourceName);
+  const saved = loadColMapping(_pendingSourceKey);
   if (saved) colOverrides = saved;
 
   const cols = { ...detectColumns(raw[0]), ...colOverrides };
