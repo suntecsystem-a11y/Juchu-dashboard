@@ -1441,7 +1441,8 @@ function runQualityCheck(rows) {
   const emptyProduct = rows.filter(r => !r.product || !r.product.trim()).length;
   const zeroPrice    = rows.filter(r => r.price === 0).length;
   const negPrice     = rows.filter(r => r.price < 0).length;
-  const futureDate   = rows.filter(r => r.date && r.date > new Date()).length;
+  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+  const futureDate   = rows.filter(r => r.date && r.date > todayEnd).length;
   if (emptyDate    > 0) issues.push({ icon: '📅', text: `注文日が空の行：<strong>${emptyDate}件</strong>` });
   if (emptyProduct > 0) issues.push({ icon: '📦', text: `商品名が空の行：<strong>${emptyProduct}件</strong>` });
   if (zeroPrice    > 0) issues.push({ icon: '💴', text: `価格が0の行：<strong>${zeroPrice}件</strong>` });
