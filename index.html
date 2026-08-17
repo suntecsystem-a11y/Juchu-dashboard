@@ -954,15 +954,22 @@ function loadFile(file) {
   r.onload = e => {
     try {
       const isCSV = file.name.toLowerCase().endsWith('.csv');
-      let wb;
+      let rows;
       if (isCSV) {
         const text = decodeCSV(e.target.result);
-        wb = XLSX.read(text, { type: 'string' });
+        if (typeof XLSX !== 'undefined') {
+          const wb = XLSX.read(text, { type: 'string' });
+          rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+        } else {
+          rows = parseCSVText(text);
+        }
       } else {
-        wb = XLSX.read(e.target.result, { type: 'array' });
+        if (typeof XLSX === 'undefined') throw new Error('Excelファイルの読み込みにはインターネット接続が必要です（ライブラリ未読み込み）');
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
       }
       _pendingSourceKey = file.name;
-      processData(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }), file.name);
+      processData(rows, file.name);
     } catch(err) { alert('読み込み失敗: ' + err.message); }
   };
   r.readAsArrayBuffer(file);
@@ -973,14 +980,42 @@ function isHtmlResponse(text) {
   return t.startsWith('<!') || t.startsWith('<html') || t.startsWith('<head') || t.startsWith('<body');
 }
 
+// ===== CSV fallback parser (XLSXなしでも動く) =====
+function splitCSVLine(line) {
+  const result = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else cur += c;
+  }
+  result.push(cur);
+  return result;
+}
+function parseCSVText(text) {
+  const lines = text.split(/\r?\n/);
+  const headers = splitCSVLine(lines[0]);
+  return lines.slice(1).filter(l => l.trim()).map(l => {
+    const vals = splitCSVLine(l);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = vals[i] !== undefined ? vals[i] : ''; });
+    return obj;
+  });
+}
+
 async function parseGsResponse(res) {
   const buf = await res.arrayBuffer();
   const text = decodeCSV(buf);
   if (isHtmlResponse(text)) throw new Error(
     'HTMLが返されました。共有設定を確認するか、「ファイル→共有→ウェブに公開→CSV」のURLをお試しください。'
   );
-  const wb = XLSX.read(text, { type: 'string' });
-  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+  let rows;
+  if (typeof XLSX !== 'undefined') {
+    const wb = XLSX.read(text, { type: 'string' });
+    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+  } else {
+    rows = parseCSVText(text);
+  }
   if (!rows.length) throw new Error('データが見つかりませんでした。シートにデータが入力されているか確認してください。');
   return rows;
 }
