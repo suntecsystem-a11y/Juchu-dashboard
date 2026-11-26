@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>受注ダッシュボード</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -488,8 +488,7 @@ body.dark mark { background: #7c6f00; }
   <div id="loader">
     <div class="tab-bar">
       <button class="tab-btn active" onclick="switchTab('file')">📁 ファイル選択</button>
-      <button class="tab-btn" onclick="switchTab('google')">🟢 Google スプレッドシート</button>
-      <button class="tab-btn" onclick="switchTab('onedrive')">🔵 OneDrive Excel</button>
+      <button class="tab-btn" onclick="switchTab('kintone')">Kintone から開く</button>
     </div>
     <div id="tab-file" class="tab-panel active">
       <div id="dropZone"
@@ -503,40 +502,11 @@ body.dark mark { background: #7c6f00; }
         <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFileInput(event)">
       </div>
     </div>
-    <div id="tab-google" class="tab-panel">
-      <div class="service-badge google">Google スプレッドシート</div>
-      <p class="url-hint">シートのURLを貼り付けてください。読み込めない場合は下記の「ウェブに公開」手順をお試しください。</p>
-      <div class="url-row">
-        <input type="text" id="googleUrl" class="url-input" placeholder="https://docs.google.com/spreadsheets/d/xxxxx/edit">
-        <button class="load-btn" id="googleLoadBtn" onclick="loadGoogleSheet()">読み込む</button>
-        <button class="load-btn" style="background:var(--surface);color:var(--text2);border:1px solid var(--border2);margin-left:4px" onclick="saveBookmark()">💾 保存</button>
-      </div>
-      <div style="position:relative;margin-top:6px">
-        <button class="export-btn" id="bookmarkBtn" onclick="toggleBookmarkPopup()">📂 よく使うURL</button>
-        <div class="bookmark-popup" id="bookmarkPopup">
-          <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px">保存済みURL</div>
-          <div id="bookmarkList"></div>
-        </div>
-      </div>
-      <div class="spinner" id="googleSpinner"><div class="spinner-ring"></div>読み込み中…</div>
-      <div class="error-msg" id="googleError"></div>
-      <p class="url-note">
-        ※ ネットワーク環境によってはCORSプロキシが使えない場合があります。その場合は以下の手順で「ウェブに公開」URLを使用してください。<br>
-        　① Googleスプレッドシートを開く → <strong>ファイル → 共有 → ウェブに公開</strong><br>
-        　② 「リンク」タブで形式を <strong>「カンマ区切りの値（.csv）」</strong> に変更 → 「公開」→ URLをコピー<br>
-        　③ そのURLをここに貼り付けて読み込む
-      </p>
-    </div>
-    <div id="tab-onedrive" class="tab-panel">
-      <div class="service-badge onedrive">OneDrive / Excel Online</div>
-      <p class="url-hint">OneDrive の「共有」→「リンクのコピー」で取得したURLを貼り付けてください。</p>
-      <div class="url-row">
-        <input type="text" id="onedriveUrl" class="url-input" placeholder="https://1drv.ms/x/s!...">
-        <button class="load-btn" id="onedriveLoadBtn" onclick="loadOneDrive()">読み込む</button>
-      </div>
-      <div class="spinner" id="onedriveSpinner"><div class="spinner-ring"></div>読み込み中…</div>
-      <div class="error-msg" id="onedriveError"></div>
-      <p class="url-note">※「リンクを知っている全員が閲覧可」の共有設定が必要です。</p>
+    <div id="tab-kintone" class="tab-panel">
+      <p class="url-hint">Kintone の受注管理（アプリ267）の一覧にある「受注ダッシュボードを開く」を押すと、この画面が開いて受注データを自動で読み込みます。</p>
+      <div class="spinner" id="kintoneSpinner"><div class="spinner-ring"></div>Kintone から受け取っています…</div>
+      <div class="error-msg" id="kintoneError"></div>
+      <p class="url-note">データは押した人のブラウザの中で Kintone からこの画面へ直接渡します。外のサーバーには送りません。</p>
     </div>
   </div>
 
@@ -928,7 +898,7 @@ if (localStorage.getItem('dm')) { document.body.classList.add('dark'); document.
 
 // ===== Loader tabs =====
 function switchTab(name) {
-  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['file','google','onedrive'][i] === name));
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['file','kintone'][i] === name));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
 }
@@ -1020,123 +990,74 @@ async function parseGsResponse(res) {
   return rows;
 }
 
-// ===== Google Sheets =====
-async function gsFetch(csvUrl) {
-  // 1) Direct fetch
-  try { const r = await fetch(csvUrl); if (r.ok) return r; } catch(e) {}
+// ===== Kintone から受け取る（2026-11-26）=====
+// Kintone のアプリ267 のボタン（dashboard_button_kintone.js）が、押した人の権限で読んだ注文を postMessage で渡してくる。
+// 受け取るのは、この画面を開いた Kintone の画面（window.opener）から・Kintone の出どころから来たものだけ。
+const KINTONE_ORIGIN = 'https://zcbwgd3ubjo5.cybozu.com';
+const KINTONE_SOURCE = 'Kintone 受注管理（アプリ267）';
+const KINTONE_COLS = { id:'注文ID', date:'注文日', product:'商品名', qty:'注文数量', price:'単価', total:'受注金額合計',
+  status:'ステータス', category:'カテゴリ', series:'シリーズ', shipping:'送料' };
+let _kintoneTimer = null;
 
-  // 2) Alternate Google export URL (export?format=csv instead of gviz/tq)
-  const altUrl = csvUrl.replace(/\/gviz\/tq\?tqx=out:csv(&gid=(\d+))?/, (_, __, gid) =>
-    `/export?format=csv${gid ? '&gid=' + gid : ''}`);
-  if (altUrl !== csvUrl) {
-    try { const r = await fetch(altUrl); if (r.ok) return r; } catch(e) {}
+function askKintone(type) {
+  if (!window.opener) return false;
+  window.opener.postMessage({ type }, KINTONE_ORIGIN);
+  return true;
+}
+function kintoneWaiting(on, msg) {
+  document.getElementById('kintoneSpinner').classList.toggle('show', !!on);
+  const er = document.getElementById('kintoneError');
+  if (msg) showError(er, msg); else er.classList.remove('show');
+}
+
+window.addEventListener('message', (ev) => {
+  if (ev.origin !== KINTONE_ORIGIN || !window.opener || ev.source !== window.opener) return;
+  const d = ev.data || {};
+  if (d.type === 'juchu-kintone-error') {
+    clearTimeout(_kintoneTimer);
+    kintoneWaiting(false, 'Kintone から読み込めませんでした: ' + String(d.message || '').slice(0, 200));
+    document.getElementById('refreshBtn').disabled = false;
+    return;
   }
-
-  // 3) CORS proxies (plain text response)
-  const proxies = [
-    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-    u => `https://thingproxy.freeboard.io/fetch/${u}`,
-    u => `https://proxy.cors.sh/${u}`,
-  ];
-  for (const proxy of proxies) {
-    try {
-      const r = await fetch(proxy(csvUrl), { headers: { 'x-requested-with': 'XMLHttpRequest' } });
-      if (r.ok) return r;
-    } catch(e) {}
-  }
-
-  // 4) allorigins /get returns JSON with .contents — wrap it in a fake Response
-  try {
-    const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(csvUrl)}`);
-    if (r.ok) {
-      const json = await r.json();
-      if (json.contents) return new Response(json.contents, { status: 200 });
-    }
-  } catch(e) {}
-
-  throw new Error('すべてのプロキシで読み込みに失敗しました。ネットワーク接続を確認してください。');
-}
-
-async function loadGoogleSheet() {
-  const url = document.getElementById('googleUrl').value.trim();
-  const btn = document.getElementById('googleLoadBtn'), sp = document.getElementById('googleSpinner'), er = document.getElementById('googleError');
-  er.classList.remove('show');
-
-  const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  if (!m) { showError(er, 'URLからスプレッドシートIDを取得できませんでした。'); return; }
-  const gid = (url.match(/[#&?]gid=(\d+)/) || [,'0'])[1];
-  btn.disabled = true; sp.classList.add('show');
-
-  // ウェブに公開のCSV URLはプロキシなしで直接取得
-  const isPub = url.includes('/pub?') || url.includes('output=csv');
-  const csvUrl = isPub ? url
-    : `https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&gid=${gid}`;
-
-  try {
-    const res = isPub ? await fetch(csvUrl) : await gsFetch(csvUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const rows = await parseGsResponse(res);
-    _pendingSourceKey = url;
-    processData(rows, 'Google スプレッドシート');
-    lastSource = { type: 'google', url }; localStorage.setItem('lastGoogleUrl', url);
-  } catch(err) { showError(er, '読み込みに失敗: ' + err.message); }
-  finally { btn.disabled = false; sp.classList.remove('show'); }
-}
-
-// ===== OneDrive =====
-async function loadOneDrive() {
-  const url = document.getElementById('onedriveUrl').value.trim();
-  const btn = document.getElementById('onedriveLoadBtn'), sp = document.getElementById('onedriveSpinner'), er = document.getElementById('onedriveError');
-  er.classList.remove('show');
-  if (!url) { showError(er, 'URLを入力してください。'); return; }
-  btn.disabled = true; sp.classList.add('show');
-  try {
-    const encoded = 'u!' + btoa(url).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-    const res = await fetch(`https://api.onedrive.com/v1.0/shares/${encoded}/root/content`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const wb = XLSX.read(await res.arrayBuffer(), { type: 'array' });
-    _pendingSourceKey = url;
-    processData(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }), 'OneDrive Excel');
-    lastSource = { type: 'onedrive', url }; localStorage.setItem('lastOnedriveUrl', url);
-  } catch(err) { showError(er, '読み込みに失敗: ' + err.message); }
-  finally { btn.disabled = false; sp.classList.remove('show'); }
-}
-
-async function refreshData() {
-  if (!lastSource) return;
+  if (d.type !== 'juchu-kintone-orders' || !Array.isArray(d.rows)) return;
+  clearTimeout(_kintoneTimer);
+  kintoneWaiting(false);
   const btn = document.getElementById('refreshBtn');
+  btn.disabled = false; btn.classList.remove('spinning');
+  const rows = d.rows.filter(r => r && typeof r === 'object').map(r => {
+    const o = {};
+    Object.keys(KINTONE_COLS).forEach(k => { const c = KINTONE_COLS[k]; o[c] = typeof r[c] === 'string' ? r[c] : ''; });
+    ['進捗','出荷日','納期','在庫引当'].forEach(c => { o[c] = typeof r[c] === 'string' ? r[c] : ''; });
+    return o;
+  });
+  if (!rows.length) { kintoneWaiting(false, 'Kintone に受注データがありませんでした'); return; }
+  lastSource = { type: 'kintone' };
+  _pendingSourceKey = 'kintone:267';
+  saveColMapping(_pendingSourceKey, { ...KINTONE_COLS });
+  processData(rows, KINTONE_SOURCE);
+});
+
+function refreshData() {
+  if (!lastSource || lastSource.type !== 'kintone') return;
+  const btn = document.getElementById('refreshBtn');
+  if (!askKintone('juchu-dashboard-reload')) { alert('Kintone の画面が閉じられています。Kintone からもう一度開いてください'); return; }
   btn.disabled = true; btn.classList.add('spinning');
-  const saved = lastSource;
-  try {
-    if (saved.type === 'google') {
-      const m = saved.url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-      const gid = (saved.url.match(/[#&?]gid=(\d+)/) || [,'0'])[1];
-      const csvU = `https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&gid=${gid}`;
-      const res = await gsFetch(csvU);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const wb = XLSX.read(await res.text(), { type: 'string' });
-      processData(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }), 'Google スプレッドシート');
-    } else {
-      const encoded = 'u!' + btoa(saved.url).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-      const res = await fetch(`https://api.onedrive.com/v1.0/shares/${encoded}/root/content`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const wb = XLSX.read(await res.arrayBuffer(), { type: 'array' });
-      processData(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }), 'OneDrive Excel');
-    }
-    lastSource = saved;
-  } catch(err) { alert('再読み込みに失敗: ' + err.message); }
-  finally { btn.disabled = false; btn.classList.remove('spinning'); }
 }
 
 function showError(el, msg) { el.textContent = msg; el.classList.add('show'); }
 
 window.addEventListener('DOMContentLoaded', () => {
-  const gu = localStorage.getItem('lastGoogleUrl');
-  const ou = localStorage.getItem('lastOnedriveUrl');
-  if (gu) document.getElementById('googleUrl').value = gu;
-  if (ou) document.getElementById('onedriveUrl').value = ou;
+  // 以前の Google・OneDrive の URL（シートの場所）がこのブラウザに残っていれば消す
+  ['lastGoogleUrl', 'lastOnedriveUrl', 'urlBookmarks'].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+  if (location.hash === '#kintone') {
+    switchTab('kintone');
+    if (askKintone('juchu-dashboard-ready')) {
+      kintoneWaiting(true);
+      _kintoneTimer = setTimeout(() => kintoneWaiting(false, 'Kintone から届きませんでした。Kintone の画面からもう一度「受注ダッシュボードを開く」を押してください'), 30000);
+    } else {
+      kintoneWaiting(false, 'Kintone の画面から開いてください（アプリ267 の一覧の「受注ダッシュボードを開く」）');
+    }
+  }
 });
 
 // ===== Column detection =====
@@ -1352,7 +1273,7 @@ function _applyDataWithCols(overrides) {
   document.getElementById('fileInfo').textContent = sourceName + '  (' + allRows.length + '件)' + (colSummary ? '  [' + colSummary + ']' : '');
   document.getElementById('loader').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
-  document.getElementById('refreshBtn').classList.toggle('visible', sourceName === 'Google スプレッドシート' || sourceName === 'OneDrive Excel');
+  document.getElementById('refreshBtn').classList.toggle('visible', sourceName === KINTONE_SOURCE);
   const dates = allRows.map(r => r.date).filter(Boolean);
   if (dates.length) {
     const mn = new Date(Math.min(...dates)), mx = new Date(Math.max(...dates));
@@ -1365,75 +1286,6 @@ function _applyDataWithCols(overrides) {
   initTargetInput();
   renderCurrentView();
 }
-
-// ===== URLブックマーク =====
-function getBookmarks() {
-  try { return JSON.parse(localStorage.getItem('urlBookmarks') || '[]'); } catch(e) { return []; }
-}
-function saveBookmarks(list) {
-  localStorage.setItem('urlBookmarks', JSON.stringify(list));
-}
-function saveBookmark() {
-  const url = document.getElementById('googleUrl').value.trim();
-  if (!url) { showWarn('URLを入力してから保存してください'); return; }
-  const name = prompt('このURLの名前を入力してください（例：受注データ2026）');
-  if (!name) return;
-  const list = getBookmarks();
-  list.push({ name, url, savedAt: new Date().toLocaleDateString('ja-JP') });
-  saveBookmarks(list);
-  showWarn('✅ 保存しました：' + name);
-}
-function toggleBookmarkPopup() {
-  const popup = document.getElementById('bookmarkPopup');
-  if (!popup.classList.contains('show')) renderBookmarkList();
-  popup.classList.toggle('show');
-}
-function renderBookmarkList() {
-  const list = getBookmarks();
-  const el = document.getElementById('bookmarkList');
-  if (!list.length) {
-    el.innerHTML = '<div class="bookmark-empty">保存済みのURLはありません</div>';
-    return;
-  }
-  el.innerHTML = list.map((b, i) => `
-    <div class="bookmark-item" onclick="loadBookmark(${i})">
-      <div style="flex:1;min-width:0">
-        <div class="bookmark-name">${esc(b.name)}</div>
-        <div class="bookmark-url">${esc(b.url)}</div>
-      </div>
-      <span style="font-size:10px;color:var(--text3);flex-shrink:0">${b.savedAt||''}</span>
-      <button class="bookmark-edit" title="名前を変更" onclick="renameBookmark(event,${i})">編集</button>
-      <button class="bookmark-del" title="削除" onclick="deleteBookmark(event,${i})">削除</button>
-    </div>`).join('');
-}
-function loadBookmark(i) {
-  const list = getBookmarks();
-  if (!list[i]) return;
-  document.getElementById('googleUrl').value = list[i].url;
-  document.getElementById('bookmarkPopup').classList.remove('show');
-  loadGoogleSheet();
-}
-function renameBookmark(e, i) {
-  e.stopPropagation();
-  const list = getBookmarks();
-  const newName = prompt('新しい名前を入力してください', list[i].name);
-  if (!newName || newName === list[i].name) return;
-  list[i].name = newName;
-  saveBookmarks(list);
-  renderBookmarkList();
-}
-function deleteBookmark(e, i) {
-  e.stopPropagation();
-  const list = getBookmarks();
-  if (!confirm(`「${list[i].name}」を削除しますか？`)) return;
-  list.splice(i, 1);
-  saveBookmarks(list);
-  renderBookmarkList();
-}
-document.addEventListener('click', e => {
-  const wrap = document.getElementById('bookmarkBtn')?.parentElement;
-  if (wrap && !wrap.contains(e.target)) document.getElementById('bookmarkPopup')?.classList.remove('show');
-});
 
 // ===== 月次目標 =====
 let monthlyTarget = parseInt(localStorage.getItem('monthlyTarget') || '0');
@@ -1811,7 +1663,7 @@ function processData(raw, sourceName) {
   rawData = raw;
   rawHeaders = Object.keys(raw[0]);
   _pendingSourceName = sourceName;
-  // _pendingSourceKey はloadFile/loadGoogleSheet/loadOneDriveで事前にセット済み
+  // _pendingSourceKey はloadFile と Kintone からの受け取りで事前にセット済み
   // セットされていなければsourceNameで代用
   if (!_pendingSourceKey) _pendingSourceKey = sourceName;
 
@@ -2784,8 +2636,7 @@ function resetDashboard() {
   document.getElementById('view-product').style.display='none';
   document.getElementById('view-status').style.display='none';
   document.getElementById('orderTableSection').style.display='';
-  document.getElementById('googleError').classList.remove('show');
-  document.getElementById('onedriveError').classList.remove('show');
+  document.getElementById('kintoneError').classList.remove('show');
   // Reset robustness state
   rawData=[]; rawHeaders=[]; colOverrides={}; hiddenCols=new Set();
   compareMode=false; document.getElementById('compareBtn').classList.remove('on');
