@@ -996,7 +996,8 @@ async function parseGsResponse(res) {
 const KINTONE_ORIGIN = 'https://zcbwgd3ubjo5.cybozu.com';
 const KINTONE_SOURCE = 'Kintone 受注管理（アプリ267）';
 const KINTONE_COLS = { id:'注文ID', date:'注文日', product:'商品名', qty:'注文数量', price:'単価', total:'受注金額合計',
-  status:'ステータス', category:'カテゴリ', series:'シリーズ', shipping:'送料' };
+  status:'進捗', category:'カテゴリ', series:'シリーズ', shipping:'送料' };
+// app267 の「ステータス」（プロセス管理）は空で、発送済・キャンセルなどは「進捗」に入っている（2026-11-26 確認）
 let _kintoneTimer = null;
 
 function askKintone(type) {
@@ -1027,7 +1028,9 @@ window.addEventListener('message', (ev) => {
   const rows = d.rows.filter(r => r && typeof r === 'object').map(r => {
     const o = {};
     Object.keys(KINTONE_COLS).forEach(k => { const c = KINTONE_COLS[k]; o[c] = typeof r[c] === 'string' ? r[c] : ''; });
-    ['進捗','出荷日','納期','在庫引当'].forEach(c => { o[c] = typeof r[c] === 'string' ? r[c] : ''; });
+    ['出荷日','納期','在庫引当'].forEach(c => { o[c] = typeof r[c] === 'string' ? r[c] : ''; });
+    // カテゴリが空の注文は、ファイルで読んだときと同じく商品名から分ける
+    if (!o['カテゴリ']) o['カテゴリ'] = getCategory(o['商品名']);
     return o;
   });
   if (!rows.length) { kintoneWaiting(false, 'Kintone に受注データがありませんでした'); return; }
